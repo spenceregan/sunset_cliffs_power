@@ -1,0 +1,21 @@
+{
+	"solar_resource_file" : "C:/SAM/2021.12.02/solar_resource/phoenix_az_33.450495_-111.983688_psmv3_60_tmy.csv",
+	"albedo" : [ 0.20000000000000001 ],
+	"use_wf_albedo" : 1,
+	"system_use_lifetime_output" : 0,
+	"analysis_period" : 25,
+	"system_capacity" : 10,
+	"module_type" : 0,
+	"dc_ac_ratio" : 1.3,
+	"bifaciality" : 0.65000000000000002,
+	"array_type" : 2,
+	"tilt" : 0,
+	"azimuth" : 180,
+	"gcr" : 0.29999999999999999,
+	"soiling" : [ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ],
+	"losses" : 13.260166776533444,
+	"en_snowloss" : 0,
+	"inv_eff" : 96,
+	"batt_simple_enable" : 0,
+	"constant" : 0
+}
