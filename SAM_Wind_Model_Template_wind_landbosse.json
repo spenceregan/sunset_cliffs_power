@@ -1,0 +1,13 @@
+{
+	"en_landbosse" : 0,
+	"distance_to_interconnect_mi" : 0,
+	"interconnect_voltage_kV" : 137,
+	"depth" : 1,
+	"rated_thrust_N" : 0,
+	"labor_cost_multiplier" : 0,
+	"gust_velocity_m_per_s" : 0,
+	"num_turbines" : 31,
+	"turbine_spacing_rotor_diameters" : 8,
+	"row_spacing_rotor_diameters" : 8,
+	"turbine_rating_MW" : 4.5
+}
