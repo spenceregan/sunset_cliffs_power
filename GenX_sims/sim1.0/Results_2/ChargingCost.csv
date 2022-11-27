@@ -1,0 +1,6 @@
+Region,Resource,Zone,Cluster,AnnualSum
+SD,onshore_wind,1,1,0.0
+SD,solar_pv_sat,1,1,0.0
+SD,hydro,1,1,0.0
+SD,battery,1,1,4.746209973757759e6
+SD,pumped_hydro,1,1,0.0

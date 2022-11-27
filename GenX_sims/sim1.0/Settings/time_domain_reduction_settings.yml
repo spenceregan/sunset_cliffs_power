@@ -15,7 +15,7 @@
   #   - TimestepsPerRepPeriod
   #   Typically 168 timesteps (e.g., hours) per period, this designates
   #   the length of each representative period.
-TimestepsPerRepPeriod: 168
+TimestepsPerRepPeriod: 1440
 
   #   - ClusterMethod
   #   Either 'kmeans' or 'kmedoids', this designates the method used to cluster
@@ -31,13 +31,13 @@ ScalingMethod: "S"
   #   The maximum number of periods - both clustered periods and extreme periods -
   #   that may be used to represent the input data. If IterativelyAddPeriods is on and the
   #   error threshold is never met, this will be the total number of periods.
-MaxPeriods: 11
+MaxPeriods: 12
 
   #   - MinPeriods
   #   The minimum number of periods used to represent the input data. If using
   #   UseExtremePeriods, this must be at least the number of extreme periods requests. If
   #   IterativelyAddPeriods if off, this will be the total number of periods.
-MinPeriods: 8
+MinPeriods: 4
 
   #   - IterativelyAddPeriods
   #   Either 'yes' or 'no', this designates whether or not to add periods
@@ -57,11 +57,11 @@ IterateMethod: "cluster"
   #   or ~95% of the total possible error (for standardization). E.g., for a threshold of 0.01,
   #   every period must be within 1% of the spread of possible error before the clustering
   #   iterations will terminate (or until the max number of periods is reached).
-Threshold: 0.05
+Threshold: 0.1
 
   #   - nReps
   #   The number of times to repeat each kmeans/kmedoids clustering at the same setting.
-nReps: 100
+nReps: 250
 
   #   - LoadWeight
   #   Default 1, this is an optional multiplier on load columns in order to prioritize
@@ -70,7 +70,7 @@ LoadWeight: 1
 
   #   - WeightTotal
   #   Default 8760, the sum to which the relative weights of representative periods will be scaled.
-WeightTotal: 8760
+WeightTotal: 105120
 
   #   - ClusterFuelPrices
   #   Either 1 (yes) or 0 (no), this indicates whether or not to use the fuel price
@@ -78,7 +78,7 @@ WeightTotal: 8760
   #   Fuels_data_clustered.csv with reshaped fuel prices based on the number and size of the
   #   representative weeks, assuming a constant time series of fuel prices with length equal to the
   #   number of timesteps in the raw input data.
-ClusterFuelPrices: 1
+ClusterFuelPrices: 0
 
   #   - UseExtremePeriods
   #   Either 'yes' or 'no', this designates whether or not to include

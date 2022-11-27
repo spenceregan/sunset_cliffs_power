@@ -1,0 +1,6 @@
+Resource,Zone,AnnualSum,Capacity,CapacityFactor
+onshore_wind,1,0.0,0.0,0.0
+solar_pv_sat,1,0.0,0.0,0.0
+hydro,1,4.3940521709616985e6,100.3546352,0.41652629207207154
+battery,1,0.05874119999998584,0.01958039999999528,0.0
+pumped_hydro,1,0.0,0.0,0.0
