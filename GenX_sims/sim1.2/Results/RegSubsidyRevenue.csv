@@ -1,6 +1,0 @@
-Region,Resource,Zone,Cluster,R_ID,SubsidyRevenue
-SD,onshore_wind,1,1,1,0.0
-SD,solar_pv_sat,1,1,2,0.0
-SD,hydro,1,1,3,0.0
-SD,battery,1,1,4,0.0
-SD,pumped_hydro,1,1,5,0.0
