@@ -46,6 +46,19 @@ SCPA_SDGE_ratio <- p_annual_sales / sdge_2022_annual_sales
 net_load <- provided_load %>%
   left_join(dg_gen) %>%
   inner_join(ev_daily_load) %>%
-  mutate(net_load = Load - Gen + SCPA_SDGE_ratio * EV_load / 1000) %>%
+  mutate(net_load = Load #- Gen
+         + SCPA_SDGE_ratio * EV_load / 1000) %>%
   select(net_load) %>%
   write_csv('net_load_MW_5min.csv')
+
+fuels_data <- data.frame(Time_Index = 0:(12*24*365), None = 0) %>%
+  write_csv('Fuels_Data.csv')
+
+hydro_gen <- read_csv('hydro_5min_year.csv',
+                      col_types = cols(
+                        Datetime = col_datetime(format = "%D %R")
+                      )) %>%
+  filter(year(Datetime) == 2022) %>%
+  pivot_longer(-Datetime, names_to = "Hour", values_to = "gen") %>%
+  write_csv('hydro_vari.csv')
+                        
