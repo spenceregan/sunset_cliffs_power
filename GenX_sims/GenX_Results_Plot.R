@@ -1,12 +1,17 @@
 library(tidyverse)
 library(lubridate)
 library(patchwork)
+library(ggridges)
+
 
 sim_folder <- "sim1.3 - geothermal added"
 results_folder <- "Results12"
 
-shw_per <- 6
+shw_per <- 4
 tdr <- TRUE
+
+periods <- 2016
+
 
 rep_per_map <- read_csv(paste(sim_folder, 
                               "TDR_Results/Period_map.csv", 
@@ -20,21 +25,23 @@ ts_per_period <-  read_csv(paste(sim_folder,
                                  "TDR_Results/Load_data.csv", 
                                  sep = "/"))$Timesteps_per_Rep_Period[1]
 
-plt_rep_pers <- read_csv(paste(sim_folder, "Load_data.csv", sep = "/")) %>%
+rep_pers <- read_csv(paste(sim_folder, "Load_data.csv", sep = "/")) %>%
   mutate(Period_Index = Time_Index %/% ts_per_period + 1) %>%
   select(Time_Index, Load_MW_z1, Period_Index) %>%
   right_join(rep_per_map) %>%
   filter(Time_Index %% 12 == 0) %>%
   mutate(Time_Index = ymd_hm("2025-01-01 00:00") + minutes(5 * (Time_Index - 1))) %>%
     mutate(Rep_Period_Index = as.factor(Rep_Period_Index)) %>%
-    select(-Period_Index) %>%
+    select(-Period_Index)
+  
+plt_rep_pers <- rep_pers %>%  
   ggplot() +
   geom_col(aes(
     x = Time_Index,
     y = Load_MW_z1,
     fill = Rep_Period_Index),
     # width = 0.5,
-    alpha = 0.35 + 0.65 * plt_rep_pers$Representitive) + 
+    alpha = 0.35 + 0.65 * rep_pers$Representitive) + 
   scale_fill_brewer(palette = "Spectral", name = "Period Bin") + 
   labs(x = NULL, y = "Load (MW)", legend) +
   theme(panel.background = element_rect(fill = "gray20"),
@@ -48,6 +55,19 @@ capacity <- read_csv(paste(sim_folder,
                      )
 
 plt_cap_col <- capacity %>%
+  filter(Resource != "Total") %>%
+  mutate(Resource = factor(Resource, levels = c(
+    "battery4",
+    "battery8",
+    "pumped_hydro_long",
+    "pumped_hydro_short",
+    "onshore_wind",
+    "solar_btm_curt",
+    "solar_btm",
+    "solar_pv_sat",
+    "hydro",
+    "geothermal"
+  ))) %>%
   ggplot(aes(x = Resource, y = EndCap, fill = Resource)) + 
     geom_col() + 
     labs(y = "Capacity (MW)",
@@ -64,6 +84,8 @@ plt_cap_col <- capacity %>%
           legend.position = "none",
           title = element_text(size = 10)) + 
   geom_text(aes(label = round(EndCap,2)), vjust = -0.3)
+
+plt_cap_col
 
 total_stor = sum(capacity$EndEnergyCap)
 
@@ -131,6 +153,13 @@ soc <- read_csv(paste(sim_folder,
   mutate(total_soc = (battery4 + battery8 + pumped_hydro_long + pumped_hydro_short)/total_stor) %>%
   select(Date, battery4, battery8, pumped_hydro_long, pumped_hydro_short, total_soc)
 
+ordc <- read_csv(paste(sim_folder, results_folder, "ReserveMargin_w.csv", sep = "/")) %>%
+  rename(shdw = "CapRes_1") %>%
+  slice(((tstart - 1) * ts_per_period + 1):(tstart * ts_per_period - 1)) %>%
+  mutate(Per = row_number(),
+         Date = ymd_hm("2025-01-01 00:00") + minutes(5*((per_ind-1) * ts_per_period + Per))) %>%
+  select(Date, shdw)
+
 power_net <- power %>%
   left_join(charge, by = "Resource", suffix = c("", "_c")) %>%
   mutate(Per = row_number(),
@@ -165,20 +194,20 @@ plt_power <- power_net %>%
   mutate(Resource = fct_drop(Resource)) %>%
   ggplot() + 
   geom_area(aes(x = Date, y = Gen, fill = Resource), alpha = 0.75) + 
-  labs(x = NULL, y = "Generator Output (MW)", title = "Dispatch Summary") +
+  labs(x = NULL, y = "Generator Output (MW)", title = paste("Weeklong Dispatch Summary - Period ", shw_per)) +
   scale_fill_viridis_d() + 
   theme(panel.background = element_rect(fill = "gray40"),
         panel.grid = element_line(color = "gray50"),
-        legend.position = "none")
+        legend.position = "right")
 
 plt_price <- price %>%
   ggplot() + 
     geom_line(aes(x = Date, y = LMP)) + 
-    labs(x = NULL) + 
+    labs(x = NULL, y = "LMP") + 
     scale_y_continuous(breaks = range(signif(price$LMP,2))) + 
     theme(axis.text.x = element_blank(),
           axis.ticks.x = element_blank(),
-          axis.title.y.right = element_text(size = 10),
+          axis.title.y = element_text(size = 9),
           panel.background = element_blank(),
           aspect.ratio = 1/20)
 
@@ -189,7 +218,19 @@ plt_soc <- soc %>%
   scale_y_continuous(breaks = round(range(soc$total_soc),digits = 2)) + 
   theme(axis.text.x = element_blank(),
         axis.ticks.x = element_blank(),
-        axis.title.y.right = element_text(size = 10),
+        axis.title.y = element_text(size = 9),
+        panel.background = element_blank(),
+        aspect.ratio = 1/20)
+
+plt_shdw <- ordc %>%
+  ggplot() + 
+  geom_line(aes(x = Date, y = shdw)) + 
+  labs(x = NULL, y = "RA $") + 
+  scale_y_continuous(trans = "log1p", 
+                     breaks = round(signif(range(ordc$shdw),2))) + 
+  theme(axis.text.x = element_blank(),
+        axis.ticks.x = element_blank(),
+        axis.title.y = element_text(size = 9),
         panel.background = element_blank(),
         aspect.ratio = 1/20)
 
@@ -211,7 +252,8 @@ plt_cap <- capacity %>%
   mutate(Resource = fct_drop(Resource)) %>%
   ggplot(aes(x = "Installed_Capacity", y = EndCap, fill = Resource)) +
   geom_bar(position = "stack",
-           stat = "identity"
+           stat = "identity",
+           show.legend = FALSE
            ) +
   labs(y = "Installed Capacity",
        x = NULL,
@@ -224,11 +266,171 @@ plt_cap <- capacity %>%
         axis.title.y.right = element_text(size = 9),
         axis.text.y.right = element_text(size = 8),
         panel.background = element_blank(),
-        aspect.ratio = 20,
-        legend.position = "left",
+        aspect.ratio = 30,
+        legend.position = "none",
         title = element_text(size = 10))
 
-(plt_power / plt_price / plt_soc) | plt_cap
+((plt_power / plt_price / plt_soc / plt_shdw) | plt_cap) 
+
+
+net_revenue <- read_csv(paste(sim_folder, 
+                              results_folder, 
+                              "NetRevenue.csv", 
+                              sep = "/"
+                              )) %>%
+  mutate(
+    `Investment Cost` = Inv_cost_MW + Inv_cost_MWh,
+    `O&M Cost` = Fixed_OM_cost_MW + Fixed_OM_cost_MWh + Var_OM_cost_in + Var_OM_cost_out,
+    ) %>%
+  rename(`Charging Cost` = Charge_cost,
+         `RA Revenue` = ReserveMarginRevenue,
+         `Energy Revenue` = EnergyRevenue) %>%
+  select(
+    Resource,
+    `Investment Cost`,
+    `O&M Cost`,
+    `Charging Cost`,
+    `RA Revenue`,
+    `Energy Revenue`
+    ) %>%
+  mutate(Resource = factor(Resource, levels = c(
+    "battery4",
+    "battery8",
+    "pumped_hydro_long",
+    "pumped_hydro_short",
+    "onshore_wind",
+    "solar_btm_curt",
+    "solar_btm",
+    "solar_pv_sat",
+    "hydro",
+    "geothermal"
+  ))) %>%
+  filter(Resource %in% capacity[capacity$EndCap > 0,]$Resource) %>%
+  mutate(Resource = fct_drop(Resource)) %>%
+  pivot_longer(cols = -Resource, 
+               names_to = "CostRevenue", 
+               values_to = "AnnualTotal"
+               ) %>%
+  mutate(AnnualTotal = AnnualTotal * if_else(CostRevenue %in% c("Energy Revenue", "RA Revenue"), 1, -1)) %>%
+  mutate(CostRevenue = factor(CostRevenue, levels = c(
+    "RA Revenue",
+    "Energy Revenue",
+    "O&M Cost",
+    "Investment Cost",
+    "Charging Cost"
+  )),  AnnualTotal = AnnualTotal / 1000000) %>%
+  ggplot(aes(x = Resource, y = AnnualTotal, fill = CostRevenue)) + 
+    geom_bar(position = "stack", stat = "identity") + 
+    labs(x = NULL,
+       fill = NULL, 
+       y = "Annual Total ($MM)") + 
+    # scale_y_continuous(trans = "log", 
+    #                    breaks = scales::breaks_log(),
+    #                    limits = c(1, NA)) + 
+  theme(axis.text.x = element_text(angle = 20, hjust = 1, vjust = 1))
+
+plt_cap_hor <- capacity %>%
+  filter(Resource != "Total") %>%
+  mutate(Resource = factor(Resource, levels = c(
+    "battery4",
+    "battery8",
+    "pumped_hydro_long",
+    "pumped_hydro_short",
+    "onshore_wind",
+    "solar_btm_curt",
+    "solar_btm",
+    "solar_pv_sat",
+    "hydro",
+    "geothermal"
+  ))) %>%
+  filter(EndCap > 0.0) %>%
+  mutate(Resource = fct_drop(Resource)) %>%
+  ggplot(aes(y = "Installed_Capacity", x = EndCap, fill = Resource)) +
+  geom_bar(position = "stack",
+           stat = "identity"
+  ) +
+  labs(x = "Total Installed Capacity",
+       y = NULL,
+       fill = NULL
+  ) + 
+  scale_x_continuous(trans = "reverse") + 
+  scale_fill_viridis_d() +
+  theme(aaxis.text. = element_blank(),
+        axis.ticks.y = element_blank(),
+        axis.ticks.x.bottom = element_line(),
+        axis.title.x.bottom = element_text(size = 9),
+        axis.text.x.bottom = element_text(size = 8),
+        panel.background = element_blank(),
+        aspect.ratio = 1/20,
+        legend.position = "none",
+        legend.key.size = unit(0.25, "cm"),
+        title = element_text(size = 10))
+
+# Rate Calculation with TDR Data
+
+tdr_demand <- read_csv(paste(sim_folder, "TDR_Results/Load_data.csv", sep = "/")) %>%
+  rename(load = Load_MW_z1) %>%
+  select(Time_Index, load) %>%
+  mutate(Rep_Period_Index = (Time_Index - 1) %/% periods + 1,
+         Period_Time_Index = (Time_Index - 1) %% periods) %>%
+  select(-Time_Index)
+
+tdr_lmp <- read_csv(paste(sim_folder, results_folder, "prices.csv", sep = "/")) %>%
+  rename(lmp = `1`) %>%
+  select(lmp) %>%
+  mutate(Rep_Period_Index = (row_number() - 1) %/% periods + 1,
+         Period_Time_Index = (row_number() - 1) %% periods)
+
+tdr_shdw <- read_csv(paste(sim_folder, results_folder, "ReserveMargin_w.csv", sep = "/")) %>%
+  rename(shdw = "CapRes_1") %>%
+  select(shdw) %>%
+  mutate(Rep_Period_Index = (row_number() - 1) %/% periods + 1,
+         Period_Time_Index = (row_number() - 1) %% periods)
+    
+demand_summary <- read_csv(paste(sim_folder, "Load_data.csv", sep = "/")) %>%
+  select(Time_Index) %>%
+  mutate(Period_Index = Time_Index %/% periods + 1, 
+         Period_Time_Index = Time_Index %% periods
+         ) %>%
+  right_join(rep_per_map) %>%
+  select(-Period_Index, -Time_Index) %>%
+  left_join(tdr_demand) %>%
+  left_join(tdr_lmp) %>%
+  left_join(tdr_shdw) %>%
+  mutate(Date = ymd_hm("2025-01-01 00:00") + minutes(5*(row_number()-1)),
+         month = month(Date),
+         hour = hour(Date)) %>%
+  group_by(month, hour) %>%
+  summarise(sum_demand = sum(load), 
+            sum_lmp = sum(lmp),
+            sum_shdw = sum(shdw))
+
+(ridges_plt <- demand_summary %>%
+  ggplot() + 
+  geom_density_ridges(aes(x = sum_demand, y = fct_rev(as.factor(month)), fill = month)))
+
+avail <- read_csv(paste(sim_folder, "TDR_Results/Generators_variability.csv", sep = "/")) %>%
+  mutate(VRE_avail = (onshore_wind + solar_pv_sat) / 2)
+
+(capres <- read_csv(paste(sim_folder, results_folder, "ReserveMargin_w.csv", sep = "/")) %>%
+  rename(shdw = "CapRes_1") %>%
+  mutate(Time_Index = row_number()) %>%
+  select(Time_Index, shdw) %>%
+  inner_join(avail) %>%
+  inner_join(demand) %>%
+  mutate(net_demand = load * (1-VRE_avail))) %>%
+  ggplot() + 
+  geom_point(aes(x = net_demand, y = shdw))
+
+capres <- read_csv(paste(sim_folder, results_folder, "ReserveMargin_w.csv", sep = "/")) %>%
+  rename(shdw = "CapRes_1") %>%
+  mutate(Time_Index = row_number()) %>%
+  select(Time_Index, shdw) %>%
+  
+ 
+# net_revenue / plt_cap_hor
+
+# plt_rep_pers
 
 # plt_power %>%
 #   ggplot() +
@@ -241,5 +443,4 @@ plt_cap <- capacity %>%
 #   pivot_wider(names_from = Resource, values_from = Gen) %>%
 #   select(hydro, solar_pv_sat, battery4, battery8) %>%
 #   pairs()
-  
-# plt_rep_pers
+
