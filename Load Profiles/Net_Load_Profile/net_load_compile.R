@@ -43,13 +43,14 @@ p_annual_sales <- sum(provided_load$`Load (MW)`) / 12.0
 
 SCPA_SDGE_ratio <- p_annual_sales / sdge_2022_annual_sales
 
-net_load <- provided_load %>%
+(net_load <- provided_load %>%
   left_join(dg_gen) %>%
-  inner_join(ev_daily_load) %>%
+  inner_join(ev_daily_load, by = c("Time", "Weekday"))) %>%
   mutate(net_load = Load #- Gen
-         + SCPA_SDGE_ratio * EV_load / 1000) %>%
-  select(net_load) %>%
-  write_csv('net_load_MW_5min.csv')
+         + SCPA_SDGE_ratio * EV_load / 1000,
+         EV_load = SCPA_SDGE_ratio * EV_load / 1000) %>%
+  # select(net_load) %>%
+  write_csv('net_load_MW_5min_breakout.csv')
 
 fuels_data <- data.frame(Time_Index = 0:(12*24*365), None = 0) %>%
   write_csv('Fuels_Data.csv')

@@ -3,12 +3,13 @@ library(lubridate)
 library(patchwork)
 library(ggridges)
 
+setwd("~/Repos/CU/Future_Power_Grid/Project2/GenX_sims")
 
-sim_folder <- "sim1.3 - geothermal added"
-results_folder <- "Results12"
+sim_folder <- "sim1.4_final"
+results_folder <- "Results_full"
 
-shw_per <- 4
-tdr <- TRUE
+shw_per <- 8
+tdr <- FALSE
 
 periods <- 2016
 
@@ -21,9 +22,7 @@ rep_per_map <- read_csv(paste(sim_folder,
   mutate(Representitive = Period_Index == Rep_Period) %>%
   select(-Rep_Period)
 
-ts_per_period <-  read_csv(paste(sim_folder, 
-                                 "TDR_Results/Load_data.csv", 
-                                 sep = "/"))$Timesteps_per_Rep_Period[1]
+ts_per_period <- 2016
 
 rep_pers <- read_csv(paste(sim_folder, "Load_data.csv", sep = "/")) %>%
   mutate(Period_Index = Time_Index %/% ts_per_period + 1) %>%
@@ -272,6 +271,7 @@ plt_cap <- capacity %>%
 
 ((plt_power / plt_price / plt_soc / plt_shdw) | plt_cap) 
 
+plt_power
 
 net_revenue <- read_csv(paste(sim_folder, 
                               results_folder, 
@@ -323,7 +323,9 @@ net_revenue <- read_csv(paste(sim_folder,
     geom_bar(position = "stack", stat = "identity") + 
     labs(x = NULL,
        fill = NULL, 
-       y = "Annual Total ($MM)") + 
+       y = "Annual Total ($MM)",
+       title = "Generator Costs & Revenues"
+       ) + 
     # scale_y_continuous(trans = "log", 
     #                    breaks = scales::breaks_log(),
     #                    limits = c(1, NA)) + 
@@ -355,7 +357,7 @@ plt_cap_hor <- capacity %>%
   ) + 
   scale_x_continuous(trans = "reverse") + 
   scale_fill_viridis_d() +
-  theme(aaxis.text. = element_blank(),
+  theme(axis.text.y = element_blank(),
         axis.ticks.y = element_blank(),
         axis.ticks.x.bottom = element_line(),
         axis.title.x.bottom = element_text(size = 9),
@@ -368,67 +370,166 @@ plt_cap_hor <- capacity %>%
 
 # Rate Calculation with TDR Data
 
-tdr_demand <- read_csv(paste(sim_folder, "TDR_Results/Load_data.csv", sep = "/")) %>%
-  rename(load = Load_MW_z1) %>%
-  select(Time_Index, load) %>%
-  mutate(Rep_Period_Index = (Time_Index - 1) %/% periods + 1,
-         Period_Time_Index = (Time_Index - 1) %% periods) %>%
-  select(-Time_Index)
+# tdr_demand <- read_csv(paste(sim_folder, "TDR_Results/Load_data.csv", sep = "/")) %>%
+#   rename(load = Load_MW_z1) %>%
+#   select(Time_Index, load) %>%
+#   mutate(Rep_Period_Index = (Time_Index - 1) %/% periods + 1,
+#          Period_Time_Index = (Time_Index - 1) %% periods) %>%
+#   select(-Time_Index)
 
 tdr_lmp <- read_csv(paste(sim_folder, results_folder, "prices.csv", sep = "/")) %>%
   rename(lmp = `1`) %>%
   select(lmp) %>%
-  mutate(Rep_Period_Index = (row_number() - 1) %/% periods + 1,
-         Period_Time_Index = (row_number() - 1) %% periods)
+  mutate(Time_Index = row_number())
 
 tdr_shdw <- read_csv(paste(sim_folder, results_folder, "ReserveMargin_w.csv", sep = "/")) %>%
   rename(shdw = "CapRes_1") %>%
   select(shdw) %>%
-  mutate(Rep_Period_Index = (row_number() - 1) %/% periods + 1,
-         Period_Time_Index = (row_number() - 1) %% periods)
+  mutate(Time_Index = row_number())
     
 demand_summary <- read_csv(paste(sim_folder, "Load_data.csv", sep = "/")) %>%
-  select(Time_Index) %>%
-  mutate(Period_Index = Time_Index %/% periods + 1, 
-         Period_Time_Index = Time_Index %% periods
-         ) %>%
-  right_join(rep_per_map) %>%
-  select(-Period_Index, -Time_Index) %>%
+  rename(load = "Load_MW_z1") %>%
+  select(Time_Index, load) %>%
   left_join(tdr_demand) %>%
   left_join(tdr_lmp) %>%
   left_join(tdr_shdw) %>%
   mutate(Date = ymd_hm("2025-01-01 00:00") + minutes(5*(row_number()-1)),
-         month = month(Date),
+         month = month(Date, label = T, abbr = T),
          hour = hour(Date)) %>%
   group_by(month, hour) %>%
   summarise(sum_demand = sum(load), 
-            sum_lmp = sum(lmp),
+            avg_lmp = 12 * mean(lmp),
             sum_shdw = sum(shdw))
 
-(ridges_plt <- demand_summary %>%
-  ggplot() + 
-  geom_density_ridges(aes(x = sum_demand, y = fct_rev(as.factor(month)), fill = month)))
 
-avail <- read_csv(paste(sim_folder, "TDR_Results/Generators_variability.csv", sep = "/")) %>%
-  mutate(VRE_avail = (onshore_wind + solar_pv_sat) / 2)
 
-(capres <- read_csv(paste(sim_folder, results_folder, "ReserveMargin_w.csv", sep = "/")) %>%
-  rename(shdw = "CapRes_1") %>%
-  mutate(Time_Index = row_number()) %>%
-  select(Time_Index, shdw) %>%
-  inner_join(avail) %>%
-  inner_join(demand) %>%
-  mutate(net_demand = load * (1-VRE_avail))) %>%
-  ggplot() + 
-  geom_point(aes(x = net_demand, y = shdw))
+price_profile <- read_csv(paste(sim_folder, "Load_data.csv", sep = "/")) %>%
+  rename(load = "Load_MW_z1") %>%
+  select(Time_Index, load) %>%
+  left_join(tdr_demand) %>%
+  left_join(tdr_lmp) %>%
+  left_join(tdr_shdw) %>%
+  mutate(shdw_cost = shdw*load)
+  
+shdw_sum <- sum(price_profile$shdw_cost)
 
-capres <- read_csv(paste(sim_folder, results_folder, "ReserveMargin_w.csv", sep = "/")) %>%
-  rename(shdw = "CapRes_1") %>%
-  mutate(Time_Index = row_number()) %>%
-  select(Time_Index, shdw) %>%
+# (ridges_month_lmp <- demand_summary %>%
+#   ggplot() + 
+#   stat_density_ridges(geom = "density_ridges_gradient", 
+#                       calc_ecdf = T,
+#                       aes(x = 12 * avg_lmp, 
+#                           y = month, 
+#                           fill = 0.5 - abs(0.5 - stat(ecdf)),
+#                           )
+#                       ) + 
+#     scale_fill_viridis_c(name = "Tail probability", direction = -1) +
+#     labs(x = "LMP ($/MWh)", y = NULL, fill = NULL))
+# 
+# (ridges_hour_lmp <- demand_summary %>%
+#     filter(month %in% c("Jul", "Aug", "Sep")) %>%
+#     ggplot() + 
+#     geom_density_ridges(alpha = 0.95, 
+#                         aes(x = 12 * avg_lmp, 
+#                             y = fct_rev(as.factor(hour)), 
+#                             fill = abs(hour - 12)
+#                             ),
+#                         linetype = 0,
+#                         bandwidth = 1
+#                         ) + 
+#     scale_fill_viridis_c(name = "Tail probability", direction = -1) +
+#     labs(x = "LMP ($/MWh)", y = "hour", fill = NULL) +
+#     theme(legend.position = "none"))
+# 
+(ridges_month_lmp <- demand_summary %>%
+    ggplot(aes(x = hour, y = fct_rev(as.factor(month)))) +
+    geom_tile(aes(fill = 12 * avg_lmp), alpha = 0.75) +
+    labs(x = "hour of day", y = "month", fill = NULL, title = "Average LMP") +
+    scale_fill_viridis_c(name = "($/MWh)"))
+
+(tile_shdw_sum <- demand_summary %>%
+    ggplot(aes(x = hour, y = fct_rev(as.factor(month)))) +
+    geom_tile(aes(fill = sum_shdw), alpha = 0.75) +
+    labs(x = "hour of day", y = "month", fill = NULL,
+         title = "RA Price Summary") +
+    scale_fill_viridis_c(name = "RA Price Sum ($/MW)"))
+
+(july_summary <- read_csv(paste(sim_folder, "Load_data.csv", sep = "/")) %>%
+  rename(load = "Load_MW_z1") %>%
+  select(Time_Index, load) %>%
+  left_join(tdr_demand) %>%
+  left_join(tdr_lmp) %>%
+  left_join(tdr_shdw) %>%
+  mutate(Date = ymd_hm("2025-01-01 00:00") + minutes(5*(row_number()-1)),
+         month = month(Date, label = T, abbr = T),
+         day = day(Date),
+         time = hms::as_hms(Date)) %>%
+  filter(month == "Jul")) %>%
+  ggplot(aes(x = day, y = time)) +
+  geom_tile(aes(fill = shdw), alpha = 0.75) +
+  labs(x = "day", y = "time", fill = NULL, title = "July RA Shadow Prices") +
+  scale_fill_viridis_c(name = "RA Price ($/MW)")
+
+curtailment <- read_csv(paste(sim_folder, results_folder, "curtail.csv", sep = "/")) %>%
+  slice(3:n()) %>%
+  mutate(Date = ymd_hm("2025-01-01 00:00") + minutes(5*(row_number()-1)),
+         month = month(Date, label = T, abbr = T),
+         day = day(Date),
+         hour = hour(Date))
+
+(tile_curtail <- curtailment %>%
+  group_by(month, hour) %>%
+  summarise(curt_total = sum(Total) / 12,
+            curt_wind = sum(onshore_wind) / 12,
+            curt_solar = sum(solar_pv_sat) / 12
+            ) %>%
+  ggplot(aes(x = hour, y = fct_rev(as.factor(month)))) +
+  geom_tile(aes(fill = curt_total), alpha = 0.75) +
+  labs(x = "hour", y = "month", fill = "Curtailment (MWh)", title = "Sum of Curtailed Generation") +
+  scale_fill_viridis_c())
+
+(tile_curtail_wind <- curtailment %>%
+    group_by(month, hour) %>%
+    summarise(curt_total = sum(Total) / 12,
+              curt_wind = sum(onshore_wind) / 12,
+              curt_solar = sum(solar_pv_sat) / 12
+    ) %>%
+    ggplot(aes(x = hour, y = fct_rev(as.factor(month)))) +
+    geom_tile(aes(fill = curt_wind), alpha = 0.75) +
+    labs(x = "hour", y = "month", fill = "Curtailment (MWh)", title = "Sum of Curtailed Wind Generation") +
+    scale_fill_viridis_c())
+
+(tile_curtail_solar <- curtailment %>%
+    group_by(month, hour) %>%
+    summarise(curt_total = sum(Total) / 12,
+              curt_wind = sum(onshore_wind) / 12,
+              curt_solar = sum(solar_pv_sat) / 12
+    ) %>%
+    ggplot(aes(x = hour, y = fct_rev(as.factor(month)))) +
+    geom_tile(aes(fill = curt_solar), alpha = 0.75) +
+    labs(x = "hour", y = "month", fill = "Curtailment (MWh)", title = "Sum of Curtailed Solar Generation") +
+    scale_fill_viridis_c())
+
+# 
+# avail <- read_csv(paste(sim_folder, "TDR_Results/Generators_variability.csv", sep = "/")) %>%
+#   mutate(VRE_avail = (onshore_wind + solar_pv_sat) / 2)
+# 
+# (capres <- read_csv(paste(sim_folder, results_folder, "ReserveMargin_w.csv", sep = "/")) %>%
+#   rename(shdw = "CapRes_1") %>%
+#   mutate(Time_Index = row_number()) %>%
+#   select(Time_Index, shdw) %>%
+#   inner_join(avail) %>%
+#   inner_join(demand) %>%
+#   mutate(net_demand = load * (1-VRE_avail))) %>%
+#   ggplot() + 
+#   geom_point(aes(x = net_demand, y = shdw))
+# 
+# capres <- read_csv(paste(sim_folder, results_folder, "ReserveMargin_w.csv", sep = "/")) %>%
+#   rename(shdw = "CapRes_1") %>%
+#   mutate(Time_Index = row_number()) %>%
+#   select(Time_Index, shdw)
   
  
-# net_revenue / plt_cap_hor
+net_revenue / plt_cap_hor
 
 # plt_rep_pers
 

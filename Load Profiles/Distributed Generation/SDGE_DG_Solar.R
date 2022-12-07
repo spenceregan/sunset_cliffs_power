@@ -1,6 +1,8 @@
 library(tidyverse)
 library(lubridate)
 
+setwd("~/Repos/CU/Future_Power_Grid/Project2/Load Profiles")
+
 SCPA_SDGE_ratio = 0.01924
 
 sdge <- read.csv('Large_Data/SDGE_Interconnected_Project_Sites_2022-10-31.csv', header = TRUE)
@@ -19,6 +21,15 @@ sdge_cumulative <- sdge %>%
     mutate(`Capacity AC` = SCPA_SDGE_ratio * cumsum(System.Size.AC) / 1000) %>%
     ungroup() %>%
     select(App.Approved.Date, Orientation, `Capacity AC`)
+
+sdge_cumulative_t <- sdge %>%
+  mutate(App.Approved.Date = ymd(App.Approved.Date),
+         App.Approved.Year = year(App.Approved.Date)) %>%
+  mutate(Azimuth = as.numeric(Azimuth)) %>%
+  filter(Technology.Type == 'Solar', App.Approved.Date > "2012-12-31") %>%
+  arrange(App.Approved.Date) %>%
+  mutate(`Capacity AC` = SCPA_SDGE_ratio * cumsum(System.Size.AC) / 1000) %>%
+  select(App.Approved.Date, `Capacity AC`)
 
 capacity_regr <- data.frame(
   App.Approved.Date = as_date(rep(c("2018-01-01", "2025-01-01"), 3)),
